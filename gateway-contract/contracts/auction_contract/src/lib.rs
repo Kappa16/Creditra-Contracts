@@ -1,7 +1,10 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
+mod errors;
 mod events;
 mod types;
+
+use errors::AuctionError;
 
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, Symbol};
 
@@ -56,8 +59,13 @@ impl Auction {
     }
 
     /// Place a bid for an auction identified by `auction_id`.
-    /// If there's a previous highest bidder, emit a `BID_RFDN` event
-    /// before attempting the refund token transfer.
+    ///
+    /// Bid floor: `amount` must be strictly greater than `max(min_bid - 1, highest_bid)`.
+    /// Equivalently, the first bid must be at least `min_bid`, and every later bid must
+    /// exceed the current highest. Equal-to-highest bids abort with `AuctionError::BidTooLow`.
+    ///
+    /// When outbidding, the previous highest bidder is refunded exactly `highest_bid`
+    /// (event first, then token transfer when `bid_token` is configured).
     pub fn place_bid(env: Env, auction_id: Symbol, bidder: Address, amount: i128) {
         bidder.require_auth();
 
@@ -79,31 +87,42 @@ impl Auction {
             panic!("auction closed");
         }
 
-        if amount < state.config.min_bid {
-            panic!("bid too low");
+        let min_floor = state.config.min_bid.saturating_sub(1);
+        let required_floor = if state.highest_bid > min_floor {
+            state.highest_bid
+        } else {
+            min_floor
+        };
+        if amount <= required_floor {
+            env.panic_with_error(AuctionError::BidTooLow);
         }
 
-        if let Some(prev_bidder) = state.highest_bidder {
-            if amount <= state.highest_bid {
-                panic!("bid must be higher than current highest bid");
-            }
+        let token_addr: Option<Address> = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "bid_token"));
 
-            // Emit refund event before performing token transfer
-            publish_bid_refunded_event(&env, prev_bidder, state.highest_bid);
+        if let Some(tkn) = token_addr.clone() {
+            let token_client = token::Client::new(&env, &tkn);
+            let contract_addr = env.current_contract_address();
+            token_client.transfer(&bidder, &contract_addr, &amount);
+        }
 
-            // Attempt refund token transfer if token address configured in instance storage
-            let token_addr: Option<Address> = env
-                .storage()
-                .instance()
-                .get(&Symbol::new(&env, "bid_token"));
+        if let Some(prev_bidder) = state.highest_bidder.clone() {
+            let refund_amount = state.highest_bid;
+
+            publish_bid_refunded_event(&env, prev_bidder.clone(), refund_amount);
+
             if let Some(tkn) = token_addr {
                 let token_client = token::Client::new(&env, &tkn);
-                // Contract is the sender of refund transfers (for tests this will be mocked)
-                token_client.transfer(&env.current_contract_address(), &prev_bidder, &state.highest_bid);
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    &prev_bidder,
+                    &refund_amount,
+                );
             }
         }
 
-        // Store new highest bid
         state.highest_bidder = Some(bidder);
         state.highest_bid = amount;
         env.storage().persistent().set(&auction_id, &state);
@@ -142,7 +161,7 @@ impl Auction {
 
         env.storage().persistent().set(&settlement_key, &true);
 
-        let winner = state.highest_bidder.unwrap_or(borrower);
+        let winner = state.highest_bidder.unwrap_or(borrower.clone());
         publish_default_liquidation_settlement_event(
             &env,
             auction_id,
@@ -169,14 +188,16 @@ impl Auction {
             panic!("auction not closed");
         }
 
-        let winner = state.highest_bidder.unwrap_or_else(|| panic!("no winner"));
+        let winner = state
+            .highest_bidder
+            .clone()
+            .unwrap_or_else(|| panic!("no winner"));
         winner.require_auth();
 
         if state.status == AuctionStatus::Claimed {
             panic!("already claimed");
         }
 
-        // Mark as claimed
         let mut updated_state = state;
         updated_state.status = AuctionStatus::Claimed;
         env.storage().persistent().set(&auction_id, &updated_state);

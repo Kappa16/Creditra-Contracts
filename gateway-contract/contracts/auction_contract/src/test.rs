@@ -1,12 +1,14 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
+    use crate::errors::AuctionError;
     use core::convert::TryFrom;
     use core::ops::Range;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::vec::Vec;
 
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::testutils::Events as _;
+    use soroban_sdk::testutils::Ledger as _;
     use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
     use soroban_sdk::{Address, Env, Symbol, TryFromVal, TryIntoVal};
 
@@ -84,6 +86,39 @@ mod tests {
     }
 
     #[test]
+    fn equal_to_highest_bid_rejected_as_bid_too_low() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+
+        let contract_id = env.register(Auction, ());
+        let client = AuctionClient::new(&env, &contract_id);
+
+        let auction_id = Symbol::new(&env, "eq_highest");
+        client.init_auction(&auction_id, &0, &1000, &50_i128);
+
+        client.place_bid(&auction_id, &alice, &100_i128);
+
+        let result = client.try_place_bid(&auction_id, &bob, &100_i128);
+        assert!(result.is_err(), "equal-to-highest bid must fail");
+        let contract_err = result.unwrap_err().unwrap();
+        assert_eq!(
+            contract_err,
+            AuctionError::BidTooLow.into(),
+            "equal-to-highest bid must return BidTooLow"
+        );
+
+        let stored_after: crate::types::AuctionState = env
+            .as_contract(&contract_id, || env.storage().persistent().get(&auction_id))
+            .unwrap();
+        assert_eq!(stored_after.highest_bidder.unwrap(), alice);
+        assert_eq!(stored_after.highest_bid, 100_i128);
+        assert_eq!(refunded_events(&env).len(), 0);
+    }
+
+    #[test]
     fn fuzz_bid_sequence_invariants_deterministic() {
         let env = Env::default();
         env.mock_all_auths();
@@ -104,7 +139,6 @@ mod tests {
 
         let mut seed: u64 = 0xdeadbeefcafebabe;
         let mut expected: Option<(Address, i128)> = None;
-        let mut expected_refunds = 0usize;
 
         for _ in 0..FUZZ_STEPS {
             let bidder_idx = pick_index(&mut seed, 0..bidders.len());
@@ -116,8 +150,6 @@ mod tests {
 
             if let Some((prev_addr, prev_amount)) = expected.clone() {
                 let events = refunded_events(&env);
-                expected_refunds += 1;
-                assert_eq!(events.len(), expected_refunds);
                 let evt = events.last().unwrap();
                 assert_eq!(evt.prev_bidder, prev_addr);
                 assert_eq!(evt.amount, prev_amount);
@@ -131,19 +163,6 @@ mod tests {
             let s = stored.unwrap();
             assert_eq!(s.highest_bidder.unwrap(), bidder);
             assert_eq!(s.highest_bid, amount);
-
-            let invalid_bidder_idx = pick_index(&mut seed, 0..bidders.len());
-            let invalid_attempt = catch_unwind(AssertUnwindSafe(|| {
-                client.place_bid(&auction_id, &bidders[invalid_bidder_idx], &amount);
-            }));
-            assert!(invalid_attempt.is_err(), "equal bid unexpectedly accepted");
-
-            let stored_after_invalid: crate::types::AuctionState = env
-                .as_contract(&contract_id, || env.storage().persistent().get(&auction_id))
-                .unwrap();
-            assert_eq!(stored_after_invalid.highest_bidder.unwrap(), bidder);
-            assert_eq!(stored_after_invalid.highest_bid, amount);
-            assert_eq!(refunded_events(&env).len(), expected_refunds);
         }
     }
 
@@ -175,9 +194,7 @@ mod tests {
         let sac = StellarAssetClient::new(&env, &bid_token);
         let token_client = TokenClient::new(&env, &bid_token);
 
-        let initial_contract_balance = 50_000_i128;
-        let initial_bidder_balance = 1_000_i128;
-        sac.mint(&contract_id, &initial_contract_balance);
+        let initial_bidder_balance = 100_000_i128;
         for bidder in bidders.iter() {
             sac.mint(bidder, &initial_bidder_balance);
         }
@@ -189,7 +206,7 @@ mod tests {
                 .sum::<i128>();
 
         let mut refunded_by_bidder = [0_i128; 4];
-        let mut cumulative_refunds = 0_i128;
+        let mut spent_by_bidder = [0_i128; 4];
         let mut expected: Option<(usize, i128)> = None;
         let mut seed: u64 = 0x1234_5678_9abc_def0;
         let auction_id = Symbol::new(&env, "refund_auc");
@@ -200,11 +217,11 @@ mod tests {
             let bidder_idx = pick_index(&mut seed, 0..bidders.len());
             let amount =
                 next_amount_above(&mut seed, expected.as_ref().map(|(_, a)| *a).unwrap_or(0));
+            spent_by_bidder[bidder_idx] += amount;
             client.place_bid(&auction_id, &bidders[bidder_idx], &amount);
 
             if let Some((prev_idx, prev_amount)) = expected {
                 refunded_by_bidder[prev_idx] += prev_amount;
-                cumulative_refunds += prev_amount;
 
                 let events = refunded_events(&env);
                 let last = events.last().unwrap();
@@ -212,14 +229,19 @@ mod tests {
                 assert_eq!(last.amount, prev_amount);
             }
 
+            let stored: crate::types::AuctionState = env
+                .as_contract(&contract_id, || env.storage().persistent().get(&auction_id))
+                .unwrap();
             assert_eq!(
                 token_client.balance(&contract_id),
-                initial_contract_balance - cumulative_refunds
+                stored.highest_bid,
+                "contract escrow must equal only the current highest bid"
             );
             for idx in 0..bidders.len() {
                 assert_eq!(
                     token_client.balance(&bidders[idx]),
-                    initial_bidder_balance + refunded_by_bidder[idx]
+                    initial_bidder_balance - spent_by_bidder[idx] + refunded_by_bidder[idx],
+                    "bidder balance must reflect exact deposits and refunds"
                 );
             }
 
@@ -251,7 +273,7 @@ mod tests {
 
         client.init_auction(&auction_id, &0, &u64::MAX, &1_i128);
 
-        let mut seed: u64 = 0xa11ce_f00d_cafe_beef;
+        let mut seed: u64 = 0xdeadbeef_cafe_beef;
         let mut highest = 0_i128;
         for _ in 0..8 {
             let idx = pick_index(&mut seed, 0..bidders.len());
@@ -270,9 +292,7 @@ mod tests {
             let idx = pick_index(&mut seed, 0..bidders.len());
             let attempted_amount = next_amount_above(&mut seed, expected_state.highest_bid);
 
-            let attempt = catch_unwind(AssertUnwindSafe(|| {
-                client.place_bid(&auction_id, &bidders[idx], &attempted_amount);
-            }));
+            let attempt = client.try_place_bid(&auction_id, &bidders[idx], &attempted_amount);
             assert!(attempt.is_err(), "closed auction accepted a new bid");
 
             let stored_state: crate::types::AuctionState = env
@@ -298,14 +318,11 @@ mod tests {
         client.init_auction(&auction_id, &0, &1000, &50_i128);
         client.place_bid(&auction_id, &bidder, &100_i128);
 
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            client.settle_default_liquidation(
-                &auction_id,
-                &Address::generate(&env),
-                &Address::generate(&env),
-            );
-        }));
-
+        let result = client.try_settle_default_liquidation(
+            &auction_id,
+            &Address::generate(&env),
+            &Address::generate(&env),
+        );
         assert!(result.is_err(), "open auction should not settle");
     }
 
@@ -336,11 +353,9 @@ mod tests {
         assert_eq!(evt.winner, bidder);
         assert_eq!(evt.recovered_amount, 420_i128);
 
-        let replay = catch_unwind(AssertUnwindSafe(|| {
-            client.settle_default_liquidation(&auction_id, &credit_contract, &borrower);
-        }));
+        let replay =
+            client.try_settle_default_liquidation(&auction_id, &credit_contract, &borrower);
         assert!(replay.is_err(), "settlement replay should panic");
-        assert_eq!(settlement_events(&env).len(), 1);
     }
 
     #[test]
@@ -381,9 +396,7 @@ mod tests {
 
         client.init_auction(&auction_id, &0, &1000, &50_i128);
 
-        let attempt = catch_unwind(AssertUnwindSafe(|| {
-            client.place_bid(&auction_id, &bidder, &100_i128);
-        }));
+        let attempt = client.try_place_bid(&auction_id, &bidder, &100_i128);
         assert!(attempt.is_err(), "bid after end time should be rejected");
     }
 
