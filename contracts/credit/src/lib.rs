@@ -12,7 +12,7 @@ mod amount_validation_tests;
 mod auth;
 mod borrow;
 mod config;
-mod events;
+pub mod events;
 mod freeze;
 mod lifecycle;
 mod risk;
