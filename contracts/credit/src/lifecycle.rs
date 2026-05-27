@@ -500,7 +500,7 @@ mod test_close_credit_line {
         }
 
         pub fn reinstate(env: Env, borrower: Address) {
-            reinstate_credit_line(env, borrower);
+            reinstate_credit_line(env, borrower, crate::types::CreditStatus::Active);
         }
 
         pub fn get(env: Env, borrower: Address) -> Option<CreditLineData> {
