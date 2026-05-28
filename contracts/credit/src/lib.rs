@@ -49,6 +49,7 @@ use crate::storage::{
     set_borrower_blocked as storage_set_borrower_blocked,
     set_borrower_unblocked,
     is_borrower_blocked as storage_is_borrower_blocked,
+    clear_repayment_schedule,
 };
 use crate::types::{
     ContractError, CreditLineData, CreditStatus, GracePeriodConfig, GraceWaiverMode,
@@ -201,6 +202,7 @@ impl Credit {
         };
 
         persist_credit_line(&env, &borrower, &credit_line, previous_utilized);
+        clear_repayment_schedule(&env, &borrower);
 
         publish_credit_line_event(
             &env,
@@ -488,6 +490,7 @@ impl Credit {
         credit_line.utilized_amount = new_utilized;
 
         persist_credit_line(&env, &borrower, &credit_line, previous_utilized);
+        lifecycle::advance_repayment_schedule_after_repay(&env, &borrower, effective_repay);
 
         let _timestamp = env.ledger().timestamp();
         publish_interest_accrued_event(
@@ -609,6 +612,33 @@ impl Credit {
         env.storage()
             .instance()
             .get(&crate::storage::grace_period_key(&env))
+    }
+
+    pub fn set_repayment_schedule(
+        env: Env,
+        borrower: Address,
+        amount_per_period: i128,
+        period_seconds: u64,
+        first_due_ts: u64,
+    ) {
+        lifecycle::set_repayment_schedule(
+            &env,
+            borrower,
+            amount_per_period,
+            period_seconds,
+            first_due_ts,
+        )
+    }
+
+    pub fn get_repayment_schedule(
+        env: Env,
+        borrower: Address,
+    ) -> Option<crate::types::RepaymentSchedule> {
+        query::get_repayment_schedule(env, borrower)
+    }
+
+    pub fn is_delinquent(env: Env, borrower: Address) -> bool {
+        query::is_delinquent(env, borrower)
     }
 
     pub fn set_max_draw_amount(env: Env, amount: i128) {
@@ -824,7 +854,6 @@ impl Credit {
             rate_change_config: env.storage().instance().get(&rate_cfg_key(&env)),
         }
     }
-}
 }
 #[cfg(test)]
 mod test_rate_change_limits {
