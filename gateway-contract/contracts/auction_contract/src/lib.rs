@@ -197,7 +197,7 @@ impl Auction {
         env.storage().persistent().set(&settlement_key, &true);
         bump_settlement_marker_ttl(&env, &settlement_key);
 
-        let winner = state.highest_bidder.unwrap_or(borrower.clone());
+        let winner = state.highest_bidder.unwrap_or_else(|| borrower.clone());
         publish_default_liquidation_settlement_event(
             &env,
             auction_id,
@@ -225,10 +225,7 @@ impl Auction {
             panic!("auction not closed");
         }
 
-        let winner = state
-            .highest_bidder
-            .clone()
-            .unwrap_or_else(|| panic!("no winner"));
+        let winner = state.highest_bidder.clone().unwrap_or_else(|| panic!("no winner"));
         winner.require_auth();
 
         if state.status == AuctionStatus::Claimed {

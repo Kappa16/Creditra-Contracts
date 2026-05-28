@@ -160,6 +160,18 @@ pub struct CreditLineData {
     pub suspension_ts: u64,
 }
 
+/// Optional installment repayment schedule attached to a credit line.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RepaymentSchedule {
+    /// Required repayment amount for each installment period.
+    pub amount_per_period: i128,
+    /// Duration of a single installment period in seconds.
+    pub period_seconds: u64,
+    /// Timestamp at which the next installment is due.
+    pub next_due_ts: u64,
+}
+
 /// Admin-configurable limits on interest-rate changes.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

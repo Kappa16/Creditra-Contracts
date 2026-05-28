@@ -20,8 +20,12 @@ use crate::events::{
     publish_default_liquidation_settled_event, CreditLineEvent, DefaultLiquidationSettledEvent,
 };
 use crate::risk::{MAX_INTEREST_RATE_BPS, MAX_RISK_SCORE};
-use crate::storage::{assert_not_paused, assert_ts_monotonic, persist_credit_line};
-use crate::types::{ContractError, CreditLineData, CreditStatus};
+use crate::storage::{
+    assert_not_paused, assert_ts_monotonic, clear_repayment_schedule, persist_credit_line,
+    get_repayment_schedule as storage_get_repayment_schedule,
+    set_repayment_schedule as storage_set_repayment_schedule,
+};
+use crate::types::{ContractError, CreditLineData, CreditStatus, RepaymentSchedule};
 use soroban_sdk::{symbol_short, Address, Env, Symbol};
 
 /// Generate a unique key for tracking liquidation settlements.
@@ -73,6 +77,66 @@ fn suspend_credit_line_internal(env: &Env, borrower: Address) {
             risk_score: credit_line.risk_score,
         },
     );
+}
+
+/// Set or replace a borrower's installment repayment schedule.
+pub fn set_repayment_schedule(
+    env: &Env,
+    borrower: Address,
+    amount_per_period: i128,
+    period_seconds: u64,
+    first_due_ts: u64,
+) {
+    assert_not_paused(env);
+    require_admin_auth(env);
+
+    if amount_per_period <= 0 || period_seconds == 0 {
+        env.panic_with_error(ContractError::InvalidAmount);
+    }
+
+    let stored_line: CreditLineData = env
+        .storage()
+        .persistent()
+        .get(&borrower)
+        .unwrap_or_else(|| env.panic_with_error(ContractError::CreditLineNotFound));
+
+    if stored_line.status == CreditStatus::Closed {
+        env.panic_with_error(ContractError::CreditLineClosed);
+    }
+
+    storage_set_repayment_schedule(
+        env,
+        &borrower,
+        &RepaymentSchedule {
+            amount_per_period,
+            period_seconds,
+            next_due_ts: first_due_ts,
+        },
+    );
+}
+
+/// Advance the next due timestamp when a qualifying repayment covers one or more installments.
+pub fn advance_repayment_schedule_after_repay(env: &Env, borrower: &Address, amount: i128) {
+    if amount <= 0 {
+        return;
+    }
+
+    let Some(mut schedule) = storage_get_repayment_schedule(env, borrower) else {
+        return;
+    };
+
+    if schedule.amount_per_period <= 0 || schedule.period_seconds == 0 {
+        return;
+    }
+
+    let installments_paid = (amount / schedule.amount_per_period) as u64;
+    if installments_paid == 0 {
+        return;
+    }
+
+    let advance_seconds = schedule.period_seconds.saturating_mul(installments_paid);
+    schedule.next_due_ts = schedule.next_due_ts.saturating_add(advance_seconds);
+    storage_set_repayment_schedule(env, borrower, &schedule);
 }
 
 /// Open a new credit line.
@@ -133,6 +197,7 @@ pub fn open_credit_line(
         suspension_ts: 0,
     };
     persist_credit_line(&env, &borrower, &credit_line, previous_utilized);
+    clear_repayment_schedule(&env, &borrower);
 
     publish_credit_line_event(
         &env,
@@ -256,6 +321,7 @@ pub fn close_credit_line(env: Env, borrower: Address, closer: Address) {
 
     credit_line.status = CreditStatus::Closed;
     persist_credit_line(&env, &borrower, &credit_line, previous_utilized);
+    clear_repayment_schedule(&env, &borrower);
 
     publish_credit_line_event(
         &env,
@@ -413,6 +479,9 @@ pub fn settle_default_liquidation(
     }
 
     persist_credit_line(&env, &borrower, &credit_line, previous_utilized);
+    if credit_line.status == CreditStatus::Closed {
+        clear_repayment_schedule(&env, &borrower);
+    }
     env.storage().persistent().set(&settlement_key, &true);
 
     if credit_line.status == CreditStatus::Closed {

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use crate::types::{ContractError, CreditLineData};
+use crate::types::{ContractError, RepaymentSchedule};
 use soroban_sdk::{contracttype, Address, Env, Symbol};
 
 /// Storage keys used in instance and persistent storage.
@@ -35,6 +35,10 @@ pub enum DataKey {
     /// Per-borrower max utilization ratio cap in basis points (e.g. 8000 = 80%).
     /// When set, draw_credit enforces: utilized_amount <= credit_limit * cap_bps / 10_000.
     UtilizationCapBps(Address),
+    /// Per-borrower installment schedule for delinquency tracking.
+    RepaymentSchedule(Address),
+    /// Storage schema version, written once during init.
+    SchemaVersion,
 }
 
 /// Maximum number of credit lines returned per page.
@@ -417,6 +421,28 @@ pub fn add_treasury_balance(env: &Env, amount: i128) {
 /// Clear the treasury balance (set to zero).
 pub fn clear_treasury_balance(env: &Env) {
     env.storage().instance().set(&DataKey::TreasuryBalance, &0_i128);
+}
+
+/// Return the installment schedule for a borrower, if configured.
+pub fn get_repayment_schedule(env: &Env, borrower: &Address) -> Option<RepaymentSchedule> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::RepaymentSchedule(borrower.clone()))
+}
+
+/// Persist the installment schedule for a borrower.
+pub fn set_repayment_schedule(env: &Env, borrower: &Address, schedule: &RepaymentSchedule) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::RepaymentSchedule(borrower.clone()), schedule);
+}
+
+/// Clear the installment schedule for a borrower, if any.
+pub fn clear_repayment_schedule(env: &Env, borrower: &Address) {
+    let key = DataKey::RepaymentSchedule(borrower.clone());
+    if env.storage().persistent().has(&key) {
+        env.storage().persistent().remove(&key);
+    }
 }
 
 /// Check whether the protocol is paused.
