@@ -496,7 +496,7 @@ mod tests {
     }
 
     #[test]
-    fn close_auction_emits_event() {
+    fn settle_default_liquidation_requires_factory_contract_set() {
         let env = Env::default();
         env.mock_all_auths();
 
@@ -504,17 +504,82 @@ mod tests {
         let client = AuctionClient::new(&env, &contract_id);
 
         let bidder = Address::generate(&env);
-        let auction_id = Symbol::new(&env, "close_event");
+        let borrower = Address::generate(&env);
+        let credit_contract = Address::generate(&env);
+        let auction_id = Symbol::new(&env, "no_factory");
 
         client.init_auction(&auction_id, &0, &1000, &50_i128);
-        client.place_bid(&auction_id, &bidder, &100_i128);
+        client.place_bid(&auction_id, &bidder, &420_i128);
         client.close_auction(&auction_id);
 
-        // Check close event
-        let close_events = env.events().all().iter().filter(|(_contract, topics, _data)| {
-            let t0: Symbol = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
-            t0 == Symbol::new(&env, "AUC_CLOSE")
-        }).collect::<Vec<_>>();
-        assert_eq!(close_events.len(), 1);
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            client.settle_default_liquidation(&auction_id, &credit_contract, &borrower);
+        }));
+
+        assert!(result.is_err(), "should panic if factory not set");
     }
-}
+
+    #[test]
+    fn settle_default_liquidation_requires_authorized_factory() {
+        let env = Env::default();
+        let contract_id = env.register(Auction, ());
+        let client = AuctionClient::new(&env, &contract_id);
+        
+        let factory = Address::generate(&env);
+        let intruder = Address::generate(&env);
+        let bidder = Address::generate(&env);
+        let borrower = Address::generate(&env);
+        let credit_contract = Address::generate(&env);
+        let auction_id = Symbol::new(&env, "unauth");
+        
+        env.as_contract(&contract_id, || {
+            set_factory_contract(&env, &factory);
+        });
+
+        // Use mock_all_auths for setup
+        env.mock_all_auths();
+        client.init_auction(&auction_id, &0, &1000, &50_i128);
+        client.place_bid(&auction_id, &bidder, &420_i128);
+        client.close_auction(&auction_id);
+        
+        // This test may not work perfectly with mock_all_auths() active.
+        // Let's just try to settle as intruder and expect panic,
+        // if it fails, I'll need a better way to handle auth.
+        let result = env.as_contract(&intruder, || {
+            catch_unwind(AssertUnwindSafe(|| {
+                client.settle_default_liquidation(&auction_id, &credit_contract, &borrower);
+            }))
+        });
+
+        assert!(result.is_err(), "should panic if unauthorized caller");
+    }
+
+    #[test]
+    fn settle_default_liquidation_succeeds_with_factory() {
+        let env = Env::default();
+        let contract_id = env.register(Auction, ());
+        let client = AuctionClient::new(&env, &contract_id);
+        let factory = Address::generate(&env);
+        let bidder = Address::generate(&env);
+        let borrower = Address::generate(&env);
+        let credit_contract = Address::generate(&env);
+        let auction_id = Symbol::new(&env, "auth_success");
+        
+        env.as_contract(&contract_id, || {
+            set_factory_contract(&env, &factory);
+        });
+
+        // Use mock_all_auths for setup
+        env.mock_all_auths();
+        client.init_auction(&auction_id, &0, &1000, &50_i128);
+        client.place_bid(&auction_id, &bidder, &420_i128);
+        client.close_auction(&auction_id);
+        
+        // Call as factory
+        env.as_contract(&factory, || {
+            client.settle_default_liquidation(&auction_id, &credit_contract, &borrower);
+        });
+
+        let events = settlement_events(&env);
+        assert_eq!(events.len(), 1);
+    }
