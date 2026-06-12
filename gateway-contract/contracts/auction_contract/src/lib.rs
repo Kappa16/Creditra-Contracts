@@ -1,5 +1,25 @@
 #![cfg_attr(not(test), no_std)]
 
+//! # gateway-auction
+//!
+//! Minimal English-auction contract used by the Creditra credit contract to
+//! settle defaulted collateral.
+//!
+//! ## Design at a glance
+//! - English (open ascending) auction with a configurable minimum bid increment.
+//! - Anti-snipe extension: bids within an "extension window" of the close time
+//!   push the close time out by a fixed amount.
+//! - Highest bid is held by the contract; previous high bidder is refunded
+//!   atomically when outbid (see [`events::publish_bid_refunded_event`]).
+//! - Default-liquidation settlement is gated through a hook from the credit
+//!   contract; see [`publish_default_liquidation_settlement_event`].
+//!
+//! ## Modules
+//! - [`errors`] — `AuctionError` codes used by the contract.
+//! - [`events`] — Soroban events emitted by the contract.
+//! - [`storage`] — Persistent/instance keys and TTL helpers.
+//! - [`types`] — Stored data types (`AuctionState`, etc.).
+
 mod errors;
 mod events;
 mod storage;
