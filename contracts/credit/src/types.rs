@@ -3,6 +3,50 @@
 #![cfg_attr(coverage_nightly, coverage(off))]
 
 //! Core data types for the Creditra contract.
+//!
+//! # What
+//!
+//! ABI-stable types that cross the contract boundary:
+//!
+//! - [`ContractError`] — 38-variant `#[repr(u32)]` error enum (discriminants
+//!   pinned by `tests/error_discriminants.rs`). See
+//!   [`docs/contract-errors.md`](../../../docs/contract-errors.md) for the
+//!   categorized reference.
+//! - [`CreditStatus`] — 5-variant state-machine label (Active=0,
+//!   Suspended=1, Defaulted=2, Closed=3, Restricted=4). See
+//!   [`docs/state-machine.md`](../../../docs/state-machine.md) for the
+//!   transition graph.
+//! - [`CreditLineData`] — the per-borrower record (limit, utilized, rate,
+//!   score, status, accrual + suspension timestamps, accrued interest).
+//! - [`RepaymentSchedule`] — installment metadata
+//!   (`amount_per_period`, `period_seconds`, `next_due_ts`).
+//! - [`RateChangeConfig`] — magnitude + cadence cap on
+//!   `update_risk_parameters`.
+//! - [`RateFormulaConfig`] — piecewise-linear rate formula parameters
+//!   `(base_rate_bps, slope_bps_per_score, min_rate_bps, max_rate_bps)`.
+//! - [`GracePeriodConfig`] / [`GraceWaiverMode`] — suspension grace policy
+//!   (FullWaiver vs ReducedRate) consumed by [`crate::accrual`].
+//! - [`OracleConfig`] — price-feed circuit-breaker parameters
+//!   `(max_deviation_bps, max_age_seconds)`.
+//! - [`ProtocolConfig`] — host-side projection used by
+//!   `get_protocol_config` (NOT `#[contracttype]`).
+//!
+//! # How
+//!
+//! All types are `#[contracttype]`-tagged unless explicitly marked
+//! otherwise; this makes them cross the Soroban host ABI as structured
+//! values. Discriminants on the two enums are ABI-stable; new variants must
+//! be appended to preserve indexer and SDK compatibility.
+//!
+//! # Why
+//!
+//! These types are the protocol's externalized vocabulary. They are
+//! consumed by off-chain indexers (`docs/indexer-integration.md`), by
+//! SDK clients building transactions, and by integrators reading the
+//! contract state for risk dashboards. Stability of the discriminants and
+//! field layout is enforced by CI tests so a downstream consumer can pin
+//! against a `major.minor.patch` of `CONTRACT_API_VERSION` (currently
+//! `(1, 0, 0)`).
 
 use soroban_sdk::{contracttype, Address};
 
