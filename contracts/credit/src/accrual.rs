@@ -310,7 +310,7 @@ pub fn accrue_batch(env: &Env, borrowers: Vec<Address>) {
         if let Some(credit_line) = line {
             if credit_line.status == CreditStatus::Active {
                 let updated = apply_accrual(env, credit_line);
-                persist_credit_line(env, &borrower, &updated);
+                persist_credit_line(env, &borrower, &updated, 0);
             }
         }
     }

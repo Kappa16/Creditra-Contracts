@@ -121,6 +121,8 @@ use crate::events::{
     InterestAccruedEvent, RepaymentEvent,
     publish_oracle_config_set_event, publish_oracle_price_accepted_event,
     publish_contract_upgraded_event, ContractUpgradedEvent,
+    publish_draw_reversed_event, DrawReversedEvent,
+    publish_rate_formula_config_event,
 };
 use crate::math_utils::{mul_div, Rounding, compute_deviation_bps};
 use crate::storage::{
@@ -136,10 +138,11 @@ use crate::storage::{
     set_last_draw_ts as storage_set_last_draw_ts,
     get_utilization_cap_bps as storage_get_utilization_cap_bps,
     set_utilization_cap_bps as storage_set_utilization_cap_bps,
+    get_oracle_config, set_oracle_config, rate_formula_key,
 };
 use crate::types::{
     ContractError, CreditLineData, CreditStatus, GracePeriodConfig, GraceWaiverMode,
-    OracleConfig, RateChangeConfig,
+    OracleConfig, RateChangeConfig, RateFormulaConfig, ProtocolConfig,
 };
 use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, BytesN, Env, Symbol, Vec};
 
