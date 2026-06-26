@@ -414,6 +414,22 @@ pub fn publish_oracle_price_accepted_event(env: &Env, price: i128, timestamp: u6
     );
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LateFeeChargedEvent {
+    pub borrower: Address,
+    pub fee: i128,
+    pub installment_index: u64,
+}
+
+/// Publish a late fee charged event when a missed installment is detected.
+pub fn publish_late_fee_charged_event(env: &Env, event: LateFeeChargedEvent) {
+    env.events().publish(
+        (symbol_short!("credit"), symbol_short!("late_fee")),
+        event,
+    );
+}
+
 /// Publish a grace waiver applied event when a suspended line's accrual uses the grace period.
 pub fn publish_grace_waiver_applied_event(
     env: &Env,
