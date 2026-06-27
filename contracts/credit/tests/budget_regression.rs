@@ -21,14 +21,21 @@ fn load_baselines() -> HashMap<String, Baseline> {
     if !path.exists() {
         return HashMap::new();
     }
-    let raw =
-        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
     let list: Vec<Baseline> =
         serde_json::from_str(&raw).unwrap_or_else(|e| panic!("bad JSON in snapshot: {e}"));
-    list.into_iter().map(|b| (b.entrypoint.clone(), b)).collect()
+    list.into_iter()
+        .map(|b| (b.entrypoint.clone(), b))
+        .collect()
 }
 
-fn assert_within_tolerance(entrypoint: &str, observed_cpu: u64, observed_mem: u64, baseline: &Baseline) {
+fn assert_within_tolerance(
+    entrypoint: &str,
+    observed_cpu: u64,
+    observed_mem: u64,
+    baseline: &Baseline,
+) {
     let tol = baseline.tolerance_pct.unwrap_or(BUDGET_TOLERANCE_PCT) / 100.0;
     let check = |label: &str, observed: u64, pinned: u64| {
         let delta_pct = (observed as f64 - pinned as f64).abs() / (pinned as f64) * 100.0;
@@ -42,7 +49,13 @@ fn assert_within_tolerance(entrypoint: &str, observed_cpu: u64, observed_mem: u6
     check("memory_bytes", observed_mem, baseline.memory_bytes);
 }
 
-fn setup() -> (Env, creditra_credit::CreditClient<'static>, token::StellarAssetClient<'static>, Address, Address) {
+fn setup() -> (
+    Env,
+    creditra_credit::CreditClient<'static>,
+    token::StellarAssetClient<'static>,
+    Address,
+    Address,
+) {
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     env.mock_all_auths_allowing_non_root_auth();
@@ -50,7 +63,9 @@ fn setup() -> (Env, creditra_credit::CreditClient<'static>, token::StellarAssetC
     let admin = Address::generate(&env);
     let borrower = Address::generate(&env);
 
-    let token_id = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let token_id = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
     let token = token::StellarAssetClient::new(&env, &token_id);
     let token_client = token::Client::new(&env, &token_id);
 
@@ -87,7 +102,10 @@ macro_rules! budget_test {
             if let Some(baseline) = baselines.get($ep) {
                 assert_within_tolerance($ep, cpu, mem, baseline);
             } else {
-                println!("[budget_regression] no baseline for '{ep}'; observed cpu={cpu} mem={mem}", ep = $ep);
+                println!(
+                    "[budget_regression] no baseline for '{ep}'; observed cpu={cpu} mem={mem}",
+                    ep = $ep
+                );
             }
         }
     };
@@ -126,7 +144,9 @@ fn budget_open_credit_line() {
     if let Some(b) = baselines.get("open_credit_line") {
         assert_within_tolerance("open_credit_line", cpu, mem, b);
     } else {
-        println!("[budget_regression] no baseline for 'open_credit_line'; observed cpu={cpu} mem={mem}");
+        println!(
+            "[budget_regression] no baseline for 'open_credit_line'; observed cpu={cpu} mem={mem}"
+        );
     }
 }
 
@@ -163,7 +183,9 @@ fn budget_repay_credit() {
     if let Some(b) = baselines.get("repay_credit") {
         assert_within_tolerance("repay_credit", cpu, mem, b);
     } else {
-        println!("[budget_regression] no baseline for 'repay_credit'; observed cpu={cpu} mem={mem}");
+        println!(
+            "[budget_regression] no baseline for 'repay_credit'; observed cpu={cpu} mem={mem}"
+        );
     }
 }
 
@@ -273,7 +295,11 @@ fn budget_withdraw_collateral() {
 fn budget_accrue_batch() {
     let baselines = load_baselines();
     let (env, credit, token, admin, _admin_addr) = setup();
-    let token_client = token::Client::new(&env, &env.register_stellar_asset_contract_v2(admin.clone()).address());
+    let token_client = token::Client::new(
+        &env,
+        &env.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    );
 
     let mut vec = soroban_sdk::Vec::new(&env);
     for _ in 0..5 {
@@ -293,7 +319,9 @@ fn budget_accrue_batch() {
     if let Some(b) = baselines.get("accrue_batch") {
         assert_within_tolerance("accrue_batch", cpu, mem, b);
     } else {
-        println!("[budget_regression] no baseline for 'accrue_batch'; observed cpu={cpu} mem={mem}");
+        println!(
+            "[budget_regression] no baseline for 'accrue_batch'; observed cpu={cpu} mem={mem}"
+        );
     }
 }
 
@@ -309,7 +337,9 @@ fn budget_freeze_draws() {
     if let Some(b) = baselines.get("freeze_draws") {
         assert_within_tolerance("freeze_draws", cpu, mem, b);
     } else {
-        println!("[budget_regression] no baseline for 'freeze_draws'; observed cpu={cpu} mem={mem}");
+        println!(
+            "[budget_regression] no baseline for 'freeze_draws'; observed cpu={cpu} mem={mem}"
+        );
     }
 }
 
@@ -325,7 +355,9 @@ fn budget_unfreeze_draws() {
     if let Some(b) = baselines.get("unfreeze_draws") {
         assert_within_tolerance("unfreeze_draws", cpu, mem, b);
     } else {
-        println!("[budget_regression] no baseline for 'unfreeze_draws'; observed cpu={cpu} mem={mem}");
+        println!(
+            "[budget_regression] no baseline for 'unfreeze_draws'; observed cpu={cpu} mem={mem}"
+        );
     }
 }
 
@@ -362,6 +394,8 @@ fn budget_close_credit_line() {
     if let Some(b) = baselines.get("close_credit_line") {
         assert_within_tolerance("close_credit_line", cpu, mem, b);
     } else {
-        println!("[budget_regression] no baseline for 'close_credit_line'; observed cpu={cpu} mem={mem}");
+        println!(
+            "[budget_regression] no baseline for 'close_credit_line'; observed cpu={cpu} mem={mem}"
+        );
     }
 }

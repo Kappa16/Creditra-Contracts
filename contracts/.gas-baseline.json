@@ -7,26 +7,26 @@
   },
   {
     "entrypoint": "open_credit_line",
-    "cpu_instructions": 202096,
-    "memory_bytes": 40919,
+    "cpu_instructions": 214413,
+    "memory_bytes": 41732,
     "tolerance_pct": 5.0
   },
   {
     "entrypoint": "draw_credit",
-    "cpu_instructions": 509521,
-    "memory_bytes": 83896,
+    "cpu_instructions": 533640,
+    "memory_bytes": 89266,
     "tolerance_pct": 5.0
   },
   {
     "entrypoint": "repay_credit",
-    "cpu_instructions": 459882,
-    "memory_bytes": 71826,
+    "cpu_instructions": 462875,
+    "memory_bytes": 74167,
     "tolerance_pct": 5.0
   },
   {
     "entrypoint": "update_risk_parameters",
-    "cpu_instructions": 180259,
-    "memory_bytes": 30588,
+    "cpu_instructions": 197046,
+    "memory_bytes": 34383,
     "tolerance_pct": 5.0
   },
   {
@@ -49,20 +49,20 @@
   },
   {
     "entrypoint": "deposit_collateral",
-    "cpu_instructions": 271498,
-    "memory_bytes": 48592,
+    "cpu_instructions": 278833,
+    "memory_bytes": 49795,
     "tolerance_pct": 5.0
   },
   {
     "entrypoint": "withdraw_collateral",
-    "cpu_instructions": 316949,
-    "memory_bytes": 51677,
+    "cpu_instructions": 322970,
+    "memory_bytes": 53119,
     "tolerance_pct": 5.0
   },
   {
     "entrypoint": "accrue_batch",
-    "cpu_instructions": 936673,
-    "memory_bytes": 147541,
+    "cpu_instructions": 969708,
+    "memory_bytes": 154805,
     "tolerance_pct": 10.0
   },
   {
@@ -79,14 +79,14 @@
   },
   {
     "entrypoint": "default_credit_line",
-    "cpu_instructions": 241944,
-    "memory_bytes": 39574,
+    "cpu_instructions": 264271,
+    "memory_bytes": 42217,
     "tolerance_pct": 5.0
   },
   {
     "entrypoint": "close_credit_line",
-    "cpu_instructions": 145030,
-    "memory_bytes": 25371,
+    "cpu_instructions": 189764,
+    "memory_bytes": 32696,
     "tolerance_pct": 5.0
   }
 ]
