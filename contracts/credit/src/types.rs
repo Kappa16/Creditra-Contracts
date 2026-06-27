@@ -133,6 +133,8 @@ pub enum CreditStatus {
 /// | 38   | `OraclePriceDeviation`        | Oracle price deviation exceeds the configured maximum |
 /// | 39   | `InsufficientCollateralBalance` | Borrower collateral balance cannot cover withdrawal |
 /// | 40   | `BorrowerFrozen`               | Borrower's draws are temporarily frozen until expiry |
+/// | 41   | `DrawReversalWindowExpired`     | Draw reversal window has expired |
+/// | 42   | `OriginalDrawNotFound`           | Original draw record not found for borrower |
 #[soroban_sdk::contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -217,6 +219,10 @@ pub enum ContractError {
     InsufficientCollateralBalance = 39,
     /// Borrower's draws are temporarily frozen until the specified expiry timestamp.
     BorrowerFrozen = 40,
+    /// Draw reversal window has expired (admin must reverse within DRAW_REVERSAL_WINDOW_SECS).
+    DrawReversalWindowExpired = 41,
+    /// Original draw audit record not found for the specified (borrower, timestamp) pair.
+    OriginalDrawNotFound = 42,
 }
 
 /// Stored credit line data for a borrower.

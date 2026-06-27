@@ -512,7 +512,7 @@ impl Credit {
             });
             if updated_utilized > cap_amount {
                 clear_reentrancy_guard(&env);
-                panic!("exceeds utilization cap");
+                env.panic_with_error(ContractError::OverLimit);
             }
         }
 
@@ -1417,10 +1417,7 @@ impl Credit {
         admin.require_auth();
         require_admin_auth(&env);
         if borrowers.len() > BULK_BLOCK_MAX {
-            panic!(
-                "bulk_block_borrowers: exceeds max batch size of {}",
-                BULK_BLOCK_MAX
-            );
+            env.panic_with_error(ContractError::InvalidAmount);
         }
         for borrower in borrowers.iter() {
             storage_set_borrower_blocked(&env, &borrower, true);
@@ -1437,10 +1434,7 @@ impl Credit {
     pub fn accrue_batch(env: Env, borrowers: Vec<Address>) {
         assert_not_paused(&env);
         if borrowers.len() as u32 > ACCRUE_BATCH_MAX {
-            panic!(
-                "accrue_batch: exceeds max batch size of {}",
-                ACCRUE_BATCH_MAX
-            );
+            env.panic_with_error(ContractError::InvalidAmount);
         }
 
         accrual::accrue_batch(&env, borrowers);
@@ -1516,7 +1510,7 @@ impl Credit {
 
         let now = env.ledger().timestamp();
         if now.saturating_sub(original_ts) > DRAW_REVERSAL_WINDOW_SECS {
-            panic!("draw reversal window expired");
+            env.panic_with_error(ContractError::DrawReversalWindowExpired);
         }
 
         let mut credit_line: CreditLineData = env
@@ -1530,7 +1524,7 @@ impl Credit {
             .storage()
             .persistent()
             .get(&DataKey::DrawAudit(borrower.clone(), original_ts))
-            .unwrap_or_else(|| panic!("original draw not found for borrower"));
+            .unwrap_or_else(|| env.panic_with_error(ContractError::OriginalDrawNotFound));
         let already_reversed: i128 = env
             .storage()
             .persistent()
@@ -1538,13 +1532,13 @@ impl Credit {
             .unwrap_or(0);
         let remaining_reversible = original_draw.saturating_sub(already_reversed);
         if amount > remaining_reversible {
-            panic!("reversal amount exceeds original draw");
+            env.panic_with_error(ContractError::OverLimit);
         }
 
         let new_utilized_amount = credit_line
             .utilized_amount
             .checked_sub(amount)
-            .unwrap_or_else(|| panic!("reversal exceeds outstanding utilization"));
+            .unwrap_or_else(|| env.panic_with_error(ContractError::OverLimit));
 
         credit_line.utilized_amount = new_utilized_amount;
         env.storage().persistent().set(&borrower, &credit_line);

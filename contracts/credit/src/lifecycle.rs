@@ -545,11 +545,11 @@ pub fn close_credit_line(env: Env, borrower: Address, closer: Address) {
     } else if closer == borrower {
         // Borrower self-close: only allowed when fully repaid.
         if credit_line.utilized_amount != 0 {
-            panic!("cannot close: utilized amount not zero");
+            env.panic_with_error(ContractError::UtilizationNotZero);
         }
     } else {
         // Third party: unconditionally rejected.
-        panic!("unauthorized");
+        env.panic_with_error(ContractError::Unauthorized);
     }
 
     let previous_status = credit_line.status;
