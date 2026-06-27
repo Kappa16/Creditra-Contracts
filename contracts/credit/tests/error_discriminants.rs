@@ -54,6 +54,7 @@ fn error_discriminants_are_stable() {
     assert_eq!(ContractError::OraclePriceStale as u32, 37);
     assert_eq!(ContractError::OraclePriceDeviation as u32, 38);
     assert_eq!(ContractError::InsufficientCollateralBalance as u32, 39);
+    assert_eq!(ContractError::CloseFactorAboveMax as u32, 40);
 }
 
 /// Verify no two variants share the same discriminant.
