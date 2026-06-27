@@ -1,0 +1,92 @@
+[
+  {
+    "entrypoint": "init",
+    "cpu_instructions": 47851,
+    "memory_bytes": 4700,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "open_credit_line",
+    "cpu_instructions": 202096,
+    "memory_bytes": 40919,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "draw_credit",
+    "cpu_instructions": 509521,
+    "memory_bytes": 83896,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "repay_credit",
+    "cpu_instructions": 459882,
+    "memory_bytes": 71826,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "update_risk_parameters",
+    "cpu_instructions": 180259,
+    "memory_bytes": 30588,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "set_rate_formula_config",
+    "cpu_instructions": 94052,
+    "memory_bytes": 17069,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "set_credit_limit_bounds",
+    "cpu_instructions": 97639,
+    "memory_bytes": 16508,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "set_utilization_cap",
+    "cpu_instructions": 70748,
+    "memory_bytes": 14113,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "deposit_collateral",
+    "cpu_instructions": 271498,
+    "memory_bytes": 48592,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "withdraw_collateral",
+    "cpu_instructions": 316949,
+    "memory_bytes": 51677,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "accrue_batch",
+    "cpu_instructions": 936673,
+    "memory_bytes": 147541,
+    "tolerance_pct": 10.0
+  },
+  {
+    "entrypoint": "freeze_draws",
+    "cpu_instructions": 92109,
+    "memory_bytes": 16285,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "unfreeze_draws",
+    "cpu_instructions": 97541,
+    "memory_bytes": 17481,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "default_credit_line",
+    "cpu_instructions": 241944,
+    "memory_bytes": 39574,
+    "tolerance_pct": 5.0
+  },
+  {
+    "entrypoint": "close_credit_line",
+    "cpu_instructions": 145030,
+    "memory_bytes": 25371,
+    "tolerance_pct": 5.0
+  }
+]
