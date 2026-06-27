@@ -255,10 +255,10 @@ mod tests {
     #[test]
     fn test_derive_score_from_hash_distribution() {
         let env = Env::default();
-        
+
         // Test that the distribution covers the range
         let mut scores = std::collections::HashSet::new();
-        for i in 0..100 {
+        for i in 0u32..100 {
             let mut bytes = [0u8; 32];
             bytes[0] = i as u8;
             let hash: BytesN<32> = BytesN::from_array(&env, &bytes);
