@@ -140,8 +140,10 @@ pub enum CreditStatus {
 /// | 38   | `OraclePriceDeviation`        | Oracle price deviation exceeds the configured maximum |
 /// | 39   | `InsufficientCollateralBalance` | Borrower collateral balance cannot cover withdrawal |
 /// | 40   | `BorrowerFrozen`               | Borrower's draws are temporarily frozen until expiry |
-/// | 41   | `DrawReversalWindowExpired`     | Draw reversal window has expired |
-/// | 42   | `OriginalDrawNotFound`           | Original draw record not found for borrower |
+/// | 41   | `BountyNotSet`                 | Bounty pool address is not configured |
+/// | 42   | `NoPendingTreasuryWithdrawal`  | No pending treasury withdrawal proposal exists |
+/// | 43   | `TreasuryTimelockActive`       | Treasury withdrawal timelock has not yet elapsed |
+/// | 44   | `TreasuryProposalExists`       | A treasury withdrawal proposal already exists |
 #[soroban_sdk::contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -226,12 +228,14 @@ pub enum ContractError {
     InsufficientCollateralBalance = 39,
     /// Borrower's draws are temporarily frozen until the specified expiry timestamp.
     BorrowerFrozen = 40,
-    /// Draw reversal window has expired (admin must reverse within DRAW_REVERSAL_WINDOW_SECS).
-    DrawReversalWindowExpired = 41,
-    /// Original draw audit record not found for the specified (borrower, timestamp) pair.
-    OriginalDrawNotFound = 42,
-    /// No attestation batch has been committed for the specified borrower.
-    AttestationBatchNotFound = 43,
+    /// Bounty pool address is not configured when attempting a bounty withdrawal.
+    BountyNotSet = 41,
+    /// No pending treasury withdrawal proposal exists when attempting execution.
+    NoPendingTreasuryWithdrawal = 42,
+    /// The 24-hour treasury withdrawal timelock has not yet elapsed.
+    TreasuryTimelockActive = 43,
+    /// A treasury withdrawal proposal already exists; cancel or execute it first.
+    TreasuryProposalExists = 44,
 }
 
 /// Stored credit line data for a borrower.
@@ -416,33 +420,30 @@ pub struct ProtocolSummaryView {
     pub active_line_count: u32,
 }
 
-/// Proof-of-reserve view for the protocol treasury.
+/// A pending treasury withdrawal proposal created by `propose_treasury_withdrawal`.
 ///
-/// Exposes the accumulated reserves held by the protocol in a single
-/// read-only call. Indexers and dashboards can use this to verify that
-/// the protocol's accounting balances are consistent.
+/// Exactly one proposal can exist at a time. It must be executed (or superseded
+/// only after a successful `execute_treasury_withdrawal` clears it) no sooner
+/// than 24 hours after it was proposed.
+///
+/// # Timelock
+/// `execute_after` is set to `proposal_ts + 86_400` (24 hours in seconds) at
+/// proposal time. The execution entrypoint rejects calls when
+/// `env.ledger().timestamp() < execute_after`.
+///
+/// # Storage
+/// Stored in instance storage under [`crate::storage::DataKey::PendingTreasuryWithdrawal`].
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProofOfReserve {
-    /// Accumulated protocol fees held in the contract (treasury share).
-    pub treasury_balance: i128,
-    /// Accumulated bounty pool fees held in the contract.
-    pub bounty_balance: i128,
-}
-
-/// Reason for protocol pause (escape-hatch audit trail).
-///
-/// Stored alongside the pause flag in instance storage when the admin invokes
-/// `set_protocol_paused`. Intended for governance transparency and off-chain
-/// monitoring — the reason is a human-readable symbol that indexers and
-/// dashboards can display to explain why the protocol is paused.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PauseReason {
-    /// Human-readable reason for pausing (e.g., "oracle-outage", "token-migration").
-    pub reason: soroban_sdk::Symbol,
-    /// Ledger timestamp when the pause was activated.
-    pub timestamp: u64,
-    /// Admin address that invoked the pause.
-    pub actor: soroban_sdk::Address,
+pub struct TreasuryWithdrawalProposal {
+    /// The treasury address that will receive the funds.
+    pub recipient: Address,
+    /// Amount to transfer (snapshot of `TreasuryBalance` at proposal time).
+    pub amount: i128,
+    /// Address of the admin who submitted the proposal.
+    pub proposer: Address,
+    /// Ledger timestamp at which the proposal was created.
+    pub proposed_at: u64,
+    /// Earliest ledger timestamp at which execution is permitted (`proposed_at + 86_400`).
+    pub execute_after: u64,
 }
