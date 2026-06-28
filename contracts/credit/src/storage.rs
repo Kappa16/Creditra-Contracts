@@ -60,6 +60,7 @@
 
 use crate::types::{
     ContractError, CreditLineData, CreditStatus, DrawsFreezeState, FreezeReason, RepaymentSchedule,
+    TreasuryWithdrawalProposal,
 };
 use soroban_sdk::{contracttype, Address, Env, Symbol};
 
@@ -184,6 +185,9 @@ pub enum DataKey {
     OracleLastPriceTs,
     /// Global sum of every borrower's collateral balance.
     TotalCollateral,
+    /// Pending treasury withdrawal proposal (at most one at a time).
+    /// Stored in instance storage; cleared after successful execution.
+    PendingTreasuryWithdrawal,
 }
 
 /// Maximum number of credit lines returned per page.
@@ -501,6 +505,27 @@ pub fn clear_treasury_balance(env: &Env) {
     env.storage()
         .instance()
         .set(&DataKey::TreasuryBalance, &0_i128);
+}
+
+/// Return the pending treasury withdrawal proposal, if any.
+pub fn get_pending_treasury_withdrawal(env: &Env) -> Option<TreasuryWithdrawalProposal> {
+    env.storage()
+        .instance()
+        .get(&DataKey::PendingTreasuryWithdrawal)
+}
+
+/// Store a pending treasury withdrawal proposal.
+pub fn set_pending_treasury_withdrawal(env: &Env, proposal: &TreasuryWithdrawalProposal) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingTreasuryWithdrawal, proposal);
+}
+
+/// Remove the pending treasury withdrawal proposal after execution.
+pub fn clear_pending_treasury_withdrawal(env: &Env) {
+    env.storage()
+        .instance()
+        .remove(&DataKey::PendingTreasuryWithdrawal);
 }
 
 /// Return configured treasury fee share in basis points, if set.

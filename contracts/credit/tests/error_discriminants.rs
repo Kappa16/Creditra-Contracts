@@ -56,6 +56,9 @@ fn error_discriminants_are_stable() {
     assert_eq!(ContractError::InsufficientCollateralBalance as u32, 39);
     assert_eq!(ContractError::BorrowerFrozen as u32, 40);
     assert_eq!(ContractError::BountyNotSet as u32, 41);
+    assert_eq!(ContractError::NoPendingTreasuryWithdrawal as u32, 42);
+    assert_eq!(ContractError::TreasuryTimelockActive as u32, 43);
+    assert_eq!(ContractError::TreasuryProposalExists as u32, 44);
 }
 
 /// Verify no two variants share the same discriminant.
@@ -107,6 +110,9 @@ fn no_duplicate_discriminants() {
         ContractError::InsufficientCollateralBalance as u32,
         ContractError::BorrowerFrozen as u32,
         ContractError::BountyNotSet as u32,
+        ContractError::NoPendingTreasuryWithdrawal as u32,
+        ContractError::TreasuryTimelockActive as u32,
+        ContractError::TreasuryProposalExists as u32,
     ];
 
     let unique: HashSet<u32> = codes.iter().cloned().collect();
@@ -121,8 +127,8 @@ fn no_duplicate_discriminants() {
 /// Update this number when adding new variants (and add the assertion above).
 #[test]
 fn variant_count_is_known() {
-    // 40 variants as of this writing. Update when adding new ones.
-    const EXPECTED_VARIANT_COUNT: usize = 41;
+    // 44 variants as of this writing (added 42-44 for treasury timelock in #606).
+    const EXPECTED_VARIANT_COUNT: usize = 44;
 
     let codes = [
         ContractError::Unauthorized as u32,
@@ -166,6 +172,9 @@ fn variant_count_is_known() {
         ContractError::InsufficientCollateralBalance as u32,
         ContractError::BorrowerFrozen as u32,
         ContractError::BountyNotSet as u32,
+        ContractError::NoPendingTreasuryWithdrawal as u32,
+        ContractError::TreasuryTimelockActive as u32,
+        ContractError::TreasuryProposalExists as u32,
     ];
 
     assert_eq!(
@@ -676,15 +685,15 @@ use creditra_credit::types::ContractError;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Test 12: TreasuryNotSet - withdraw_treasury without treasury configured
+    // Test 12: TreasuryNotSet - propose_treasury_withdrawal without treasury configured
     // ─────────────────────────────────────────────────────────────────────────
 
     #[test]
     fn test_treasury_not_set_on_withdraw() {
         let (_env, client, _contract_id, admin, _token) = setup_with_token();
 
-        // Try to withdraw treasury without setting treasury address
-        let result = client.try_withdraw_treasury(&admin);
+        // Try to propose withdrawal without setting treasury address
+        let result = client.try_propose_treasury_withdrawal(&admin);
 
         assert!(result.is_err(), "Expected error when treasury not set");
         let err = result.err().unwrap();

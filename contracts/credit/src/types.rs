@@ -141,6 +141,9 @@ pub enum CreditStatus {
 /// | 39   | `InsufficientCollateralBalance` | Borrower collateral balance cannot cover withdrawal |
 /// | 40   | `BorrowerFrozen`               | Borrower's draws are temporarily frozen until expiry |
 /// | 41   | `BountyNotSet`                 | Bounty pool address is not configured |
+/// | 42   | `NoPendingTreasuryWithdrawal`  | No pending treasury withdrawal proposal exists |
+/// | 43   | `TreasuryTimelockActive`       | Treasury withdrawal timelock has not yet elapsed |
+/// | 44   | `TreasuryProposalExists`       | A treasury withdrawal proposal already exists |
 #[soroban_sdk::contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -227,6 +230,12 @@ pub enum ContractError {
     BorrowerFrozen = 40,
     /// Bounty pool address is not configured when attempting a bounty withdrawal.
     BountyNotSet = 41,
+    /// No pending treasury withdrawal proposal exists when attempting execution.
+    NoPendingTreasuryWithdrawal = 42,
+    /// The 24-hour treasury withdrawal timelock has not yet elapsed.
+    TreasuryTimelockActive = 43,
+    /// A treasury withdrawal proposal already exists; cancel or execute it first.
+    TreasuryProposalExists = 44,
 }
 
 /// Stored credit line data for a borrower.
@@ -409,4 +418,32 @@ pub struct ProtocolSummaryView {
     pub total_collateral: i128,
     /// Count of currently Active credit lines.
     pub active_line_count: u32,
+}
+
+/// A pending treasury withdrawal proposal created by `propose_treasury_withdrawal`.
+///
+/// Exactly one proposal can exist at a time. It must be executed (or superseded
+/// only after a successful `execute_treasury_withdrawal` clears it) no sooner
+/// than 24 hours after it was proposed.
+///
+/// # Timelock
+/// `execute_after` is set to `proposal_ts + 86_400` (24 hours in seconds) at
+/// proposal time. The execution entrypoint rejects calls when
+/// `env.ledger().timestamp() < execute_after`.
+///
+/// # Storage
+/// Stored in instance storage under [`crate::storage::DataKey::PendingTreasuryWithdrawal`].
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TreasuryWithdrawalProposal {
+    /// The treasury address that will receive the funds.
+    pub recipient: Address,
+    /// Amount to transfer (snapshot of `TreasuryBalance` at proposal time).
+    pub amount: i128,
+    /// Address of the admin who submitted the proposal.
+    pub proposer: Address,
+    /// Ledger timestamp at which the proposal was created.
+    pub proposed_at: u64,
+    /// Earliest ledger timestamp at which execution is permitted (`proposed_at + 86_400`).
+    pub execute_after: u64,
 }

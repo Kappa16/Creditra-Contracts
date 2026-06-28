@@ -130,8 +130,11 @@ use crate::events::{
     publish_credit_line_event, publish_draw_reversed_event, publish_drawn_event,
     publish_interest_accrued_event, publish_oracle_config_set_event,
     publish_oracle_price_accepted_event, publish_rate_formula_config_event,
-    publish_repayment_event, publish_token_rescued_event, ContractUpgradedEvent, CreditLineEvent,
-    DrawReversedEvent, DrawnEvent, InterestAccruedEvent, RepaymentEvent,
+    publish_repayment_event, publish_token_rescued_event,
+    publish_treasury_withdrawal_executed, publish_treasury_withdrawal_proposed,
+    ContractUpgradedEvent, CreditLineEvent, DrawReversedEvent, DrawnEvent,
+    InterestAccruedEvent, RepaymentEvent, TreasuryWithdrawalExecutedEvent,
+    TreasuryWithdrawalProposedEvent,
 };
 use crate::math_utils::{compute_deviation_bps, mul_div, Rounding};
 use crate::storage::{
@@ -147,9 +150,14 @@ use crate::storage::{
     set_utilization_cap_bps as storage_set_utilization_cap_bps, DataKey, MAX_ENUMERATION_LIMIT,
 };
 use crate::storage::{get_oracle_config, set_oracle_config};
+use crate::storage::{
+    clear_pending_treasury_withdrawal, get_pending_treasury_withdrawal,
+    set_pending_treasury_withdrawal,
+};
 use crate::types::{
     ContractError, CreditLineData, CreditStatus, GracePeriodConfig, GraceWaiverMode, OracleConfig,
     ProtocolConfig, ProtocolSummary, ProtocolSummaryView, RateChangeConfig, RateFormulaConfig,
+    TreasuryWithdrawalProposal,
 };
 use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, BytesN, Env, Symbol, Vec};
 
@@ -942,32 +950,110 @@ impl Credit {
         crate::storage::clear_bounty_balance(&env);
     }
 
-    /// Withdraw accumulated treasury balance to configured treasury address (admin only).
-    pub fn withdraw_treasury(env: Env, admin: Address) {
+    /// Propose a treasury withdrawal (step 1 of 2 — admin only).
+    ///
+    /// Creates a pending proposal that captures the current `TreasuryBalance`
+    /// and records a 24-hour timelock. Only one proposal may exist at a time;
+    /// call `execute_treasury_withdrawal` (after the delay) to finalize it.
+    ///
+    /// # Timelock
+    /// Execution is gated until `ledger.timestamp >= proposed_at + 86_400`.
+    ///
+    /// # Errors
+    /// - [`ContractError::TreasuryNotSet`] — treasury address not configured.
+    /// - [`ContractError::TreasuryProposalExists`] — a proposal is already pending.
+    pub fn propose_treasury_withdrawal(env: Env, admin: Address) {
         admin.require_auth();
-        require_admin_auth(&env);
+        let proposer = require_admin_auth(&env);
 
-        let treasury_addr = crate::storage::get_treasury_address(&env)
-            .unwrap_or_else(|| env.panic_with_error(crate::types::ContractError::TreasuryNotSet));
-
-        let amount = crate::storage::get_treasury_balance(&env);
-        if amount == 0 {
-            return;
+        // Reject if a proposal already exists.
+        if get_pending_treasury_withdrawal(&env).is_some() {
+            env.panic_with_error(ContractError::TreasuryProposalExists);
         }
 
-        let token_address: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::LiquidityToken)
-            .unwrap_or_else(|| {
-                env.panic_with_error(crate::types::ContractError::MissingLiquidityToken)
-            });
+        let recipient = crate::storage::get_treasury_address(&env)
+            .unwrap_or_else(|| env.panic_with_error(ContractError::TreasuryNotSet));
 
-        let token_client = token::Client::new(&env, &token_address);
-        let contract_address = env.current_contract_address();
-        token_client.transfer(&contract_address, &treasury_addr, &amount);
+        let amount = crate::storage::get_treasury_balance(&env);
+        let proposed_at = env.ledger().timestamp();
+        // 24-hour timelock; saturating_add is safe for u64 in any foreseeable ledger era.
+        let execute_after = proposed_at.saturating_add(86_400u64);
 
-        crate::storage::clear_treasury_balance(&env);
+        let proposal = TreasuryWithdrawalProposal {
+            recipient: recipient.clone(),
+            amount,
+            proposer: proposer.clone(),
+            proposed_at,
+            execute_after,
+        };
+
+        set_pending_treasury_withdrawal(&env, &proposal);
+
+        publish_treasury_withdrawal_proposed(
+            &env,
+            TreasuryWithdrawalProposedEvent {
+                recipient,
+                amount,
+                proposer,
+                proposed_at,
+                execute_after,
+            },
+        );
+    }
+
+    /// Execute a pending treasury withdrawal (step 2 of 2 — admin only).
+    ///
+    /// Transfers the amount captured in the proposal to the treasury address.
+    /// Reverts if the 24-hour timelock has not yet elapsed. Clears the
+    /// proposal after a successful transfer, preventing replay.
+    ///
+    /// # Errors
+    /// - [`ContractError::NoPendingTreasuryWithdrawal`] — no proposal exists.
+    /// - [`ContractError::TreasuryTimelockActive`] — timelock not yet elapsed.
+    /// - [`ContractError::MissingLiquidityToken`] — token not configured.
+    pub fn execute_treasury_withdrawal(env: Env, admin: Address) {
+        admin.require_auth();
+        let executor = require_admin_auth(&env);
+
+        let proposal = get_pending_treasury_withdrawal(&env)
+            .unwrap_or_else(|| env.panic_with_error(ContractError::NoPendingTreasuryWithdrawal));
+
+        if env.ledger().timestamp() < proposal.execute_after {
+            env.panic_with_error(ContractError::TreasuryTimelockActive);
+        }
+
+        // Clear proposal first to prevent any reentrancy replay.
+        clear_pending_treasury_withdrawal(&env);
+
+        if proposal.amount > 0 {
+            let token_address: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::LiquidityToken)
+                .unwrap_or_else(|| env.panic_with_error(ContractError::MissingLiquidityToken));
+
+            let token_client = token::Client::new(&env, &token_address);
+            let contract_address = env.current_contract_address();
+            token_client.transfer(&contract_address, &proposal.recipient, &proposal.amount);
+
+            crate::storage::clear_treasury_balance(&env);
+        }
+
+        let executed_at = env.ledger().timestamp();
+        publish_treasury_withdrawal_executed(
+            &env,
+            TreasuryWithdrawalExecutedEvent {
+                recipient: proposal.recipient,
+                amount: proposal.amount,
+                executor,
+                executed_at,
+            },
+        );
+    }
+
+    /// Get the pending treasury withdrawal proposal, if any.
+    pub fn get_pending_treasury_withdrawal(env: Env) -> Option<TreasuryWithdrawalProposal> {
+        get_pending_treasury_withdrawal(&env)
     }
 
     /// Get the current storage schema version.
