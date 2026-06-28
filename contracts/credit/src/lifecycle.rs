@@ -10,10 +10,18 @@
 //! there is a real risk of expiry.
 
 use crate::auth::{require_admin, require_admin_auth};
-use crate::events::{publish_credit_line_event, CreditLineEvent};
-use crate::storage::{CREDIT_LINE_TTL_EXTEND_TO, CREDIT_LINE_TTL_THRESHOLD};
-use crate::types::{CreditLineData, CreditStatus};
-use soroban_sdk::{symbol_short, Address, Env};
+use crate::events::{
+    publish_credit_line_event, publish_default_liquidation_requested_event,
+    publish_default_liquidation_settled_event, CreditLineEvent, DefaultLiquidationSettledEvent,
+};
+use crate::storage::{
+    assert_not_paused, clear_repayment_schedule, grace_period_key, liquidation_settlement_key,
+    persist_credit_line, set_repayment_schedule, CREDIT_LINE_TTL_EXTEND_TO,
+    CREDIT_LINE_TTL_THRESHOLD,
+};
+use crate::risk::{MAX_INTEREST_RATE_BPS, MAX_RISK_SCORE};
+use crate::types::{ContractError, CreditLineData, CreditStatus};
+use soroban_sdk::{symbol_short, Address, Env, Symbol};
 
 /// Helper: bump the TTL of a borrower's persistent credit-line entry.
 ///
@@ -24,6 +32,43 @@ fn bump_credit_line_ttl(env: &Env, borrower: &Address) {
     env.storage()
         .persistent()
         .extend_ttl(borrower, CREDIT_LINE_TTL_THRESHOLD, CREDIT_LINE_TTL_EXTEND_TO);
+}
+
+/// Set credit limit bounds (admin only, called through contractimpl).
+///
+/// These bounds are enforced by [`validate_credit_limit_bounds`] during
+/// `open_credit_line` and `update_risk_parameters`.
+pub fn set_credit_limit_bounds(env: Env, min: i128, max: i128) {
+    require_admin_auth(&env);
+    crate::storage::set_min_credit_limit(&env, min);
+    crate::storage::set_max_credit_limit(&env, max);
+}
+
+/// Get the current credit limit bounds, if configured.
+///
+/// Returns `(Option<min>, Option<max>)` where `None` means the bound is not set.
+pub fn get_credit_limit_bounds(env: &Env) -> (Option<i128>, Option<i128>) {
+    let min = crate::storage::get_min_credit_limit(env);
+    let max = crate::storage::get_max_credit_limit(env);
+    (min, max)
+}
+
+/// Validate that a credit limit falls within the configured min/max bounds (if set).
+///
+/// # Panics
+/// - `ContractError::LimitOutOfBounds` if `credit_limit` is outside the configured range.
+pub fn validate_credit_limit_bounds(env: &Env, credit_limit: i128) {
+    let (min_limit, max_limit) = get_credit_limit_bounds(env);
+    if let Some(min) = min_limit {
+        if credit_limit < min {
+            env.panic_with_error(ContractError::LimitOutOfBounds);
+        }
+    }
+    if let Some(max) = max_limit {
+        if credit_limit > max {
+            env.panic_with_error(ContractError::LimitOutOfBounds);
+        }
+    }
 }
 
 /// Open a new credit line for a borrower (admin only).
@@ -307,50 +352,6 @@ pub fn default_credit_line(env: Env, borrower: Address) {
     );
 
     publish_default_liquidation_requested_event(&env, &borrower, credit_line.utilized_amount);
-}
-
-/// Forgive outstanding debt without transferring tokens (admin only).
-///
-/// Allowed only when status is Defaulted. Transition: Defaulted → Active.
-///
-/// # Panics
-/// - If no credit line exists for the given borrower.
-/// - If the credit line is not currently Defaulted.
-///
-/// # Events
-/// Emits a `("credit", "reinstate")` [`CreditLineEvent`].
-pub fn reinstate_credit_line(env: Env, borrower: Address) {
-    require_admin_auth(&env);
-
-    if amount <= 0 {
-        env.panic_with_error(ContractError::InvalidAmount);
-    }
-
-    let stored_line: CreditLineData = env
-        .storage()
-        .persistent()
-        .get(&borrower)
-        .unwrap_or_else(|| env.panic_with_error(ContractError::CreditLineNotFound));
-    let previous_utilized = stored_line.utilized_amount;
-
-    if stored_line.status == CreditStatus::Closed {
-        env.panic_with_error(ContractError::CreditLineClosed);
-    }
-
-    let mut credit_line = crate::accrual::apply_accrual(&env, stored_line);
-    let effective_forgive = amount.min(credit_line.utilized_amount);
-    let interest_forgiven = effective_forgive.min(credit_line.accrued_interest);
-
-    credit_line.accrued_interest = credit_line
-        .accrued_interest
-        .checked_sub(interest_forgiven)
-        .unwrap_or(0);
-    credit_line.utilized_amount = credit_line
-        .utilized_amount
-        .checked_sub(effective_forgive)
-        .unwrap_or(0);
-
-    persist_credit_line(&env, &borrower, &credit_line, previous_utilized);
 }
 
 /// Apply auction liquidation proceeds to a defaulted credit line (admin only).
