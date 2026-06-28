@@ -102,6 +102,7 @@ mod amount_validation_tests;
 mod attestation;
 mod auth;
 mod borrow;
+pub mod collateral;
 mod config;
 pub mod events;
 mod fees;
@@ -109,6 +110,7 @@ mod freeze;
 #[cfg(all(not(target_arch = "wasm32"), feature = "instrument"))]
 pub mod instrument;
 mod lifecycle;
+pub mod math_utils;
 mod query;
 mod risk;
 pub use crate::risk::compute_rate_from_score;
@@ -116,6 +118,7 @@ pub use crate::types::FreezeReason;
 mod scoring;
 mod storage;
 pub mod types;
+pub mod views;
 
 #[cfg(test)]
 mod boundary_tests;
@@ -646,6 +649,40 @@ impl Credit {
 
     pub fn get_rate_change_limits(env: Env) -> Option<RateChangeConfig> {
         risk::get_rate_change_limits(env)
+    }
+
+    /// Set a per-borrower interest rate floor (admin only).
+    ///
+    /// When set, `update_risk_parameters` will ensure the effective rate
+    /// is at least `floor_bps` for this borrower.
+    ///
+    /// # Parameters
+    /// - `borrower`: Address of the borrower.
+    /// - `floor_bps`: Minimum rate in basis points. Pass `None` to clear.
+    pub fn set_borrower_rate_floor(env: Env, borrower: Address, floor_bps: Option<u32>) {
+        risk::set_borrower_rate_floor(env, borrower, floor_bps)
+    }
+
+    /// Get the per-borrower interest rate floor, if set.
+    pub fn get_borrower_rate_floor(env: Env, borrower: Address) -> Option<u32> {
+        crate::storage::get_borrower_rate_floor(&env, &borrower)
+    }
+
+    /// Set a per-borrower interest rate ceiling (admin only).
+    ///
+    /// When set, `update_risk_parameters` will cap the effective rate
+    /// at `ceiling_bps` for this borrower.
+    ///
+    /// # Parameters
+    /// - `borrower`: Address of the borrower.
+    /// - `ceiling_bps`: Maximum rate in basis points. Pass `None` to clear.
+    pub fn set_borrower_rate_ceiling(env: Env, borrower: Address, ceiling_bps: Option<u32>) {
+        risk::set_borrower_rate_ceiling(env, borrower, ceiling_bps)
+    }
+
+    /// Get the per-borrower interest rate ceiling, if set.
+    pub fn get_borrower_rate_ceiling(env: Env, borrower: Address) -> Option<u32> {
+        crate::storage::get_borrower_rate_ceiling(&env, &borrower)
     }
 
     /// Set a per-borrower utilization cap in basis points (admin only).
@@ -5581,4 +5618,5 @@ mod test_mock_liquidity_token {
             assert_eq!(hf, 66_666);
         }
     }
+}
 }
