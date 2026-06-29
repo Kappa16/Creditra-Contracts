@@ -980,8 +980,8 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let alice = Address::generate(&env);
-        let bob = Address::generate(&env);
+        let _alice = Address::generate(&env);
+        let _bob = Address::generate(&env);
         let winner = Address::generate(&env);
 
         let contract_id = env.register(Auction, ());
@@ -1083,7 +1083,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let borrower = Address::generate(&env);
+        let _borrower = Address::generate(&env);
 
         let contract_id = env.register(Auction, ());
         let client = AuctionClient::new(&env, &contract_id);
@@ -1576,7 +1576,7 @@ mod reentrancy_preservation {
         let env = Env::default();
         env.mock_all_auths();
 
-        let alice = Address::generate(&env);
+        let _alice = Address::generate(&env);
         let contract_id = env.register(Auction, ());
         let client = AuctionClient::new(&env, &contract_id);
         let auction_id = Symbol::new(&env, "pres_first");
@@ -1595,7 +1595,7 @@ mod reentrancy_preservation {
         // Vary first-bid amounts using a deterministic sequence
         let amounts: [i128; 8] = [50, 51, 100, 999, 1_000, 10_000, 100_000, 1_000_000];
         for amount in amounts {
-            let fresh_id = Symbol::new(&env, "pres_first");
+            let _fresh_id = Symbol::new(&env, "pres_first");
             // Re-init for each amount to get a clean state
             let env2 = Env::default();
             env2.mock_all_auths();

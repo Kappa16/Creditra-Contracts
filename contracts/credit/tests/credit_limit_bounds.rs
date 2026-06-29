@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Integration tests for global credit limit bounds enforcement.

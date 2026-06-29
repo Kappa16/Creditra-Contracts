@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Comprehensive Integration Test Suite for `self_suspend_credit_line`

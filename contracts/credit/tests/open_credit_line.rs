@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 use creditra_credit::types::CreditStatus;

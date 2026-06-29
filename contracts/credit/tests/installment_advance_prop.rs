@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Ledger;
 // SPDX-License-Identifier: MIT
 //! Proptest for installment advancement logic in
 //! `advance_repayment_schedule_after_repay`.

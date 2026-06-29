@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Ledger;
 // SPDX-License-Identifier: MIT
 
 use creditra_credit::{Credit, CreditClient};

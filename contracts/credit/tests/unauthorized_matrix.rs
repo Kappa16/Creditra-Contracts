@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Unauthorized caller matrix: negative tests for every admin-only and

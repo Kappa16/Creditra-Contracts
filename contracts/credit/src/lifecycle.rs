@@ -822,16 +822,16 @@ pub fn reinstate_credit_line(env: Env, borrower: Address, target_status: CreditS
 
 #[cfg(test)]
 mod installment {
-    use crate::events::LateFeeChargedEvent;
+
     use crate::Credit;
     use crate::CreditClient;
     use soroban_sdk::{
-        testutils::{Address as _, Events as _, Ledger},
+        testutils::{Address as _, Ledger},
         token::StellarAssetClient,
-        Address, Env, Symbol, TryFromVal, TryIntoVal,
+        Address, Env,
     };
 
-    fn setup_borrower(env: &Env) -> (CreditClient, Address) {
+    fn setup_borrower(env: &Env) -> (CreditClient<'_>, Address) {
         env.mock_all_auths();
         let admin = Address::generate(env);
         let borrower = Address::generate(env);
@@ -856,7 +856,7 @@ mod installment {
     }
 
     fn with_schedule(
-        env: &Env,
+        _env: &Env,
         client: &CreditClient,
         borrower: &Address,
         amount_per_period: i128,

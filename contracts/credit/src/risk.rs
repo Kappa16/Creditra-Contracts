@@ -59,10 +59,8 @@
 #![warn(missing_docs)]
 
 use crate::auth::require_admin_auth;
-use crate::events::{publish_risk_parameters_updated, RiskParametersUpdatedEvent};
-use crate::storage::{
-    assert_not_paused, assert_ts_monotonic, persist_credit_line, rate_cfg_key, rate_formula_key,
-};
+use crate::events::publish_risk_parameters_updated;
+use crate::storage::{assert_not_paused, persist_credit_line, rate_cfg_key, rate_formula_key};
 use crate::types::{
     ContractError, CreditLineData, CreditStatus, RateChangeConfig, RateFormulaConfig,
 };

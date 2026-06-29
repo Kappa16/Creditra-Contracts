@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Pin `BorrowerBlockedEvent.ledger` to `env.ledger().sequence()` at emission.

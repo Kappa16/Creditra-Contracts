@@ -4,7 +4,7 @@ use creditra_credit::{Credit, CreditClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env};
 
-fn setup(env: &Env) -> (CreditClient, Address, Address) {
+fn setup(env: &Env) -> (CreditClient<'_>, Address, Address) {
     env.mock_all_auths();
     let admin = Address::generate(env);
     let borrower = Address::generate(env);

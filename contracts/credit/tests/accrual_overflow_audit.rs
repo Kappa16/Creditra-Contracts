@@ -1,3 +1,5 @@
+use soroban_sdk::testutils::Ledger;
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Overflow audit tests for `apply_accrual` and `compute_interest`.

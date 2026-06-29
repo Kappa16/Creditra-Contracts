@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: Apache-2.0
 //! Integration tests: `advance_repayment_schedule_after_repay` with zero-principal repay.
 //!

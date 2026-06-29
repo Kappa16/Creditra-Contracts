@@ -1,3 +1,5 @@
+use soroban_sdk::testutils::Ledger;
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 //! Property tests ensuring interest accrual is monotonically non-decreasing
 //! as ledger time advances for active, suspended, and delinquent lines.

@@ -1,3 +1,5 @@
+use soroban_sdk::testutils::Ledger;
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Cross-contract default liquidation flow for Credit + Auction.

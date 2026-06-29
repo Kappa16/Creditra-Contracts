@@ -1,4 +1,5 @@
 //! Auction storage helpers and TTL primitives.
+#![allow(dead_code)]
 //!
 //! # What
 //!

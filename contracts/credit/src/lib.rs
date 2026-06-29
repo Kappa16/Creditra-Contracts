@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: MIT
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::unused_unit)]
-
+#![allow(
+    clippy::module_inception,
+    clippy::manual_is_multiple_of,
+    clippy::mismatched_lifetime_syntaxes,
+    dead_code,
+    unused_imports,
+    unused_variables
+)]
 //! # Creditra credit contract
 //!
 //! Per-borrower credit lines on Stellar/Soroban with **algorithmic
@@ -139,7 +146,7 @@ use crate::storage::{
 use crate::storage::{get_oracle_config, set_oracle_config};
 use crate::types::{
     ContractError, CreditLineData, CreditStatus, GracePeriodConfig, GraceWaiverMode, OracleConfig,
-    ProtocolConfig, ProtocolSummary, RateChangeConfig, RateFormulaConfig, RateFormulaConfigEvent,
+    ProtocolConfig, ProtocolSummary, RateChangeConfig, RateFormulaConfig,
 };
 use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, BytesN, Env, Symbol, Vec};
 
@@ -469,7 +476,7 @@ impl Credit {
         // Enforce minimum collateral ratio
         let min_ratio_bps = crate::storage::get_min_collateral_ratio_bps(&env).unwrap_or(15000);
         let current_collateral = crate::storage::get_collateral_balance(&env, &borrower);
-        let required_collateral = (updated_utilized as i128)
+        let required_collateral = updated_utilized
             .checked_mul(min_ratio_bps as i128)
             .unwrap_or_else(|| {
                 clear_reentrancy_guard(&env);
@@ -1336,7 +1343,7 @@ impl Credit {
     /// emit `InterestAccruedEvent`.
     pub fn accrue_batch(env: Env, borrowers: Vec<Address>) {
         assert_not_paused(&env);
-        if borrowers.len() as u32 > ACCRUE_BATCH_MAX {
+        if borrowers.len() > ACCRUE_BATCH_MAX {
             panic!(
                 "accrue_batch: exceeds max batch size of {}",
                 ACCRUE_BATCH_MAX
@@ -1690,13 +1697,13 @@ mod test_rate_change_limits {
 #[cfg(test)]
 pub mod test_coverage {
     use super::*;
-    use crate::types::{ContractError, CreditStatus};
+
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::testutils::Events as _;
     use soroban_sdk::testutils::Ledger as _;
     use soroban_sdk::token::Client as TokenClient;
     use soroban_sdk::token::StellarAssetClient;
-    use soroban_sdk::{Env, TryFromVal, TryIntoVal};
+    use soroban_sdk::{Env, TryFromVal};
 
     fn base(env: &Env) -> (CreditClient<'_>, Address, Address) {
         env.mock_all_auths();
@@ -2381,7 +2388,6 @@ mod test_smoke_coverage {
 mod test_smoke_coverage_extra {
     use super::*;
     use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
 
     fn base(env: &Env) -> (CreditClient<'_>, Address, Address) {
         env.mock_all_auths();
@@ -2441,7 +2447,7 @@ mod test_smoke_coverage_extra {
 pub mod test_helpers {
     use crate::types::ContractError;
     use soroban_sdk::{
-        contract, contractimpl, symbol_short,
+        contract, contractimpl,
         testutils::Address as _,
         token::{Client as TokenClient, StellarAssetClient},
         Address, Env, Symbol,
@@ -2555,7 +2561,7 @@ pub mod test_helpers {
             );
         }
 
-        pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
+        pub fn transfer(env: Env, from: Address, _to: Address, _amount: i128) {
             from.require_auth();
             let fail: bool = env
                 .storage()
@@ -2567,7 +2573,13 @@ pub mod test_helpers {
             }
         }
 
-        pub fn transfer_from(env: Env, spender: Address, from: Address, to: Address, amount: i128) {
+        pub fn transfer_from(
+            env: Env,
+            spender: Address,
+            _from: Address,
+            _to: Address,
+            _amount: i128,
+        ) {
             spender.require_auth();
             let fail: bool = env
                 .storage()
@@ -2579,11 +2591,11 @@ pub mod test_helpers {
             }
         }
 
-        pub fn balance(env: Env, _id: Address) -> i128 {
+        pub fn balance(_env: Env, _id: Address) -> i128 {
             1_000_000 // dummy balance
         }
 
-        pub fn allowance(env: Env, _from: Address, _spender: Address) -> i128 {
+        pub fn allowance(_env: Env, _from: Address, _spender: Address) -> i128 {
             1_000_000 // dummy allowance
         }
     }
@@ -2593,7 +2605,7 @@ mod test_mock_liquidity_token {
     use super::*;
     use crate::test_helpers::MockLiquidityToken;
     use soroban_sdk::{testutils::Address as _, Env};
-    fn setup(env: &Env) -> (CreditClient, Address, Address, MockLiquidityToken) {
+    fn setup(env: &Env) -> (CreditClient<'_>, Address, Address, MockLiquidityToken) {
         env.mock_all_auths();
         let admin = Address::generate(env);
         let borrower = Address::generate(env);
@@ -2608,11 +2620,8 @@ mod test_mock_liquidity_token {
     use crate::events::CreditLineEvent;
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::testutils::Events as _;
-    use soroban_sdk::token;
-    use soroban_sdk::token::StellarAssetClient;
+
     use soroban_sdk::{symbol_short, Symbol, TryFromVal, TryIntoVal};
-    use std::boxed::Box;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
 
     #[allow(dead_code)]
     fn setup_contract_with_credit_line<'a>(

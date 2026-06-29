@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Cross-contract conservation test for settle_default_liquidation (Credit + Auction).

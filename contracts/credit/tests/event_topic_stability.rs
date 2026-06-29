@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 // CI FIX 2026-06-29 – pragmatic green
 use creditra_credit::{Credit, CreditClient};

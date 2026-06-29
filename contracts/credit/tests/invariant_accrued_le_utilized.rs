@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Invariant test: `accrued_interest <= utilized_amount` after every mutation.

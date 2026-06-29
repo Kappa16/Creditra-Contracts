@@ -1,3 +1,5 @@
+use soroban_sdk::testutils::Ledger;
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Tests for the penalty surcharge feature for delinquent credit lines.

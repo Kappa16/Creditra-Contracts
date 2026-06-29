@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: MIT
 
 //! Integration tests for the oracle price-feed staleness and deviation circuit breaker.

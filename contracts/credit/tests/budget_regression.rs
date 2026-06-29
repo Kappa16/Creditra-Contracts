@@ -1,3 +1,4 @@
+use soroban_sdk::testutils::Address;
 // SPDX-License-Identifier: Apache-2.0
 //! Budget-regression tests for the Creditra credit contract.
 //!

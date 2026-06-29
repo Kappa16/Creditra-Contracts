@@ -120,7 +120,8 @@ pub fn withdraw_collateral(env: &Env, borrower: &Address, amount: i128) {
         if credit_line.utilized_amount > 0 {
             // Compute required collateral after withdrawal
             let min_ratio_bps = get_min_collateral_ratio_bps(env).unwrap_or(15000);
-            let required = (credit_line.utilized_amount as i128)
+            let required = credit_line
+                .utilized_amount
                 .checked_mul(min_ratio_bps as i128)
                 .unwrap_or_else(|| env.panic_with_error(ContractError::Overflow))
                 / 10_000;

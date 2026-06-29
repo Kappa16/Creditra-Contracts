@@ -1,6 +1,8 @@
 use creditra_credit::types::{ContractError, CreditStatus};
 use creditra_credit::{Credit, CreditClient};
 use gateway_auction::{Auction, AuctionClient};
+use soroban_sdk::testutils::Address;
+use soroban_sdk::testutils::Ledger;
 use soroban_sdk::testutils::{Address as _, Events as _};
 use soroban_sdk::{token, Address, Env, Symbol, TryFromVal, TryIntoVal};
 use std::panic::{catch_unwind, AssertUnwindSafe};

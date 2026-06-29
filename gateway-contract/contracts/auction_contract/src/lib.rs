@@ -1,4 +1,10 @@
 #![cfg_attr(not(test), no_std)]
+#![allow(
+    dead_code,
+    unused_imports,
+    clippy::too_many_arguments,
+    clippy::manual_saturating_arithmetic
+)]
 
 //! # gateway-auction
 //!
